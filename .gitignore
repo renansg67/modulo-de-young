@@ -2,3 +2,53 @@ ensaios
 geral.csv
 resultados_norma_batch.csv
 resultados_norma_e_otimizado_v2.csv
+
+# Arquivo .gitignore para projetos Python/Streamlit
+
+# Ambientes Virtuais
+# Ignore a pasta do ambiente virtual (o nome mais comum é 'venv' ou '.venv')
+venv/
+.venv/
+
+# Arquivos de Cache e Build
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.$py.class
+
+# Arquivos de Distribuição (quando você cria pacotes)
+dist/
+build/
+*.egg-info/
+
+# Logs e Dados Temporários
+# Arquivos de log gerados
+*.log
+
+# Dados sensíveis ou muito grandes que não devem ir para o Git
+# Exemplo: databases, large datasets
+# data/
+# *.csv
+# *.db
+
+# Arquivos de Configuração do Sistema Operacional (Windows)
+Thumbs.db
+
+# Arquivos de Configuração de Editores e IDEs
+
+# Visual Studio Code (VSCode)
+.vscode/
+
+# PyCharm/IntelliJ
+.idea/
+
+# Jupyter/IPython Notebooks
+.ipynb_checkpoints
+
+# Arquivos de teste e cobertura
+.coverage
+
+# Arquivos do Streamlit
+# Arquivos que podem ser criados ao usar o Streamlit
+.streamlit/
