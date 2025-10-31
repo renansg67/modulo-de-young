@@ -2,6 +2,8 @@ ensaios
 geral.csv
 resultados_norma_batch.csv
 resultados_norma_e_otimizado_v2.csv
+ensaios_flexao
+ensaios_ruptura.xlsx
 
 # Arquivo .gitignore para projetos Python/Streamlit
 
