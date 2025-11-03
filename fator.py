@@ -114,7 +114,7 @@ if uploaded_file_calibracao:
             fig.add_trace(go.Scatter(
                 x=x_lvd, y=y_lvd, mode='lines',
                 line=dict(color='yellow', width=3, dash='dash'),
-                name=f'Regressão LVDT (slope={slope_lvd:.2f})'
+                name=f'Reg. LVDT (slp={slope_lvd:.2f})'
             ))
             
             # Pistão
@@ -124,7 +124,7 @@ if uploaded_file_calibracao:
             fig.add_trace(go.Scatter(
                 x=x_pis, y=y_pis, mode='lines',
                 line=dict(color='orange', width=3, dash='dash'),
-                name=f'Regressão Pistão (slope={slope_pis:.2f})'
+                name=f'Reg. Pistão (slp={slope_pis:.2f})'
             ))
             
             # --- Cálculo do fator de correção do módulo do pistão ---
