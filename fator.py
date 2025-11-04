@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from io import StringIO
+import os
 
 # --- Funções de Carregamento e Pré-Processamento ---
 @st.cache_data
@@ -37,9 +38,9 @@ def carregar_e_limpar_dados(uploaded_file, header_row=6):
 
 # --- Interface Streamlit ---
 st.set_page_config(layout="wide")
-st.title("📊 Visualização com Regressão e Fator de Correção do Pistão")
+st.title("📊 Análise de Regressão e Fator de Correção do Pistão")
 
-# Slider de força na sidebar
+# Slider de força
 F_range_pct = st.sidebar.slider(
     "Selecione a faixa de força (%)",
     0.0, 100.0, (10.0, 40.0), 1.0
@@ -55,12 +56,15 @@ if uploaded_file_calibracao:
     df_calibracao = carregar_e_limpar_dados(uploaded_file_calibracao)
     
     if df_calibracao is not None:
+        # Nome do arquivo sem extensão
+        nome_amostra = os.path.splitext(uploaded_file_calibracao.name)[0]
+
         # Cálculo dos limites de força
         Forca_max_abs = df_calibracao['Forca_Abs'].max()
         F_limite_min = Forca_max_abs * F_min_pct
         F_limite_max = Forca_max_abs * F_max_pct
         
-        # --- Slider para deformação (em mm) ---
+        # Slider de deslocamento
         desl_min, desl_max = (
             float(df_calibracao[['Desl_LVDT_Abs', 'Desl_Pistao_Abs']].min().min()),
             float(df_calibracao[['Desl_LVDT_Abs', 'Desl_Pistao_Abs']].max().max())
@@ -71,11 +75,12 @@ if uploaded_file_calibracao:
         )
         D_limite_min, D_limite_max = desl_range
         
-        st.info(f"**Força máxima:** {Forca_max_abs:.3f} kN  \n"
+        st.info(f"**Amostra:** `{nome_amostra}`  \n"
+                f"**Força máxima:** {Forca_max_abs:.3f} kN  \n"
                 f"**Faixa de Força:** {F_limite_min:.3f} – {F_limite_max:.3f} kN  \n"
                 f"**Faixa de Deslocamento:** {D_limite_min:.3f} – {D_limite_max:.3f} mm")
         
-        # --- Filtragem: dentro dos limites de força E deslocamento ---
+        # --- Filtragem: dentro dos limites ---
         df_filtrado = df_calibracao[
             (df_calibracao['Forca_Abs'] >= F_limite_min) &
             (df_calibracao['Forca_Abs'] <= F_limite_max) &
@@ -88,7 +93,6 @@ if uploaded_file_calibracao:
         # --- Gráfico ---
         fig = go.Figure()
         
-        # Linhas auxiliares fora da faixa (mesma cor dos pontos, finas)
         df_out = df_calibracao[~df_calibracao.index.isin(df_filtrado.index)]
         fig.add_trace(go.Scatter(
             x=df_out['Desl_LVDT_Abs'], y=df_out['Forca_Abs'],
@@ -100,8 +104,6 @@ if uploaded_file_calibracao:
             mode='lines', line=dict(color='red', width=1, dash='dot'),
             name='Pistão Fora da Faixa'
         ))
-        
-        # Pontos filtrados coloridos
         fig.add_trace(go.Scatter(
             x=df_filtrado['Desl_LVDT_Abs'], y=df_filtrado['Forca_Abs'],
             mode='markers', marker=dict(color='blue', size=6),
@@ -113,7 +115,7 @@ if uploaded_file_calibracao:
             name='Pistão (Faixa)'
         ))
         
-        # Linhas horizontais de limite de força
+        # Linhas horizontais dos limites de força
         for pct, f_lim in zip([F_min_pct, F_max_pct], [F_limite_min, F_limite_max]):
             fig.add_shape(type="line",
                           x0=0, x1=desl_max*1.05,
@@ -126,41 +128,54 @@ if uploaded_file_calibracao:
                 xanchor="left", yanchor="bottom"
             )
         
-        # Linhas verticais de limite de deslocamento
+        # Linhas verticais dos limites de deslocamento
         for d_lim in [D_limite_min, D_limite_max]:
             fig.add_shape(type="line",
                           x0=d_lim, x1=d_lim,
                           y0=0, y1=Forca_max_abs*1.05,
                           line=dict(color="purple", width=3, dash="dot"))
+            fig.add_annotation(
+                x=d_lim, y=Forca_max_abs*1.02,
+                text=f"{d_lim:.2f} mm",
+                showarrow=False, font=dict(color="purple", size=11),
+                xanchor="center"
+            )
         
-        # --- Regressão linear (somente pontos filtrados) ---
+        # --- Regressão e Fator de Correção ---
+        slope_lvd = slope_pis = np.nan
         if len(df_filtrado) >= 2:
-            # LVDT
             slope_lvd, intercept_lvd = np.polyfit(df_filtrado['Desl_LVDT_Abs'], df_filtrado['Forca_Abs'], 1)
+            slope_pis, intercept_pis = np.polyfit(df_filtrado['Desl_Pistao_Abs'], df_filtrado['Forca_Abs'], 1)
+            
+            # Retas de regressão
             x_lvd = np.array([df_filtrado['Desl_LVDT_Abs'].min(), df_filtrado['Desl_LVDT_Abs'].max()])
             y_lvd = slope_lvd * x_lvd + intercept_lvd
-            fig.add_trace(go.Scatter(
-                x=x_lvd, y=y_lvd, mode='lines',
-                line=dict(color='magenta', width=3, dash='dash'),
-                name=f'Regressão LVDT (slope={slope_lvd:.2f})'
-            ))
-            
-            # Pistão
-            slope_pis, intercept_pis = np.polyfit(df_filtrado['Desl_Pistao_Abs'], df_filtrado['Forca_Abs'], 1)
             x_pis = np.array([df_filtrado['Desl_Pistao_Abs'].min(), df_filtrado['Desl_Pistao_Abs'].max()])
             y_pis = slope_pis * x_pis + intercept_pis
-            fig.add_trace(go.Scatter(
-                x=x_pis, y=y_pis, mode='lines',
-                line=dict(color='orange', width=3, dash='dash'),
-                name=f'Regressão Pistão (slope={slope_pis:.2f})'
-            ))
-            
-            # --- Cálculo do fator de correção do módulo do pistão ---
+
+            fig.add_trace(go.Scatter(x=x_lvd, y=y_lvd, mode='lines',
+                                     line=dict(color='yellow', width=3, dash='dash'),
+                                     name=f'Regressão LVDT (slope={slope_lvd:.4f})'))
+            fig.add_trace(go.Scatter(x=x_pis, y=y_pis, mode='lines',
+                                     line=dict(color='orange', width=3, dash='dash'),
+                                     name=f'Regressão Pistão (slope={slope_pis:.4f})'))
+
             fator_correcao = slope_lvd / slope_pis
-            st.success(f"✅ Fator de Correção do Módulo (Pistão) = {fator_correcao:.3f}")
-        
+            st.success(f"✅ **Fator de Correção do Módulo (Pistão)** = {fator_correcao:.3f}")
+
+            # --- DataFrame de saída em linha ---
+            df_resultado = pd.DataFrame([{
+                "Identificação": nome_amostra,
+                "LVDT": round(slope_lvd, 4),
+                "Pistão": round(slope_pis, 4),
+                "Fmín": int(F_min_pct * 100),
+                "Fmáx": int(F_max_pct * 100)
+            }])
+            st.subheader("📋 Resultado consolidado")
+            st.dataframe(df_resultado, use_container_width=True, hide_index=True)
+
         fig.update_layout(
-            title="Carga vs Deslocamento com Filtros e Regressão",
+            title="Carga vs Deslocamento com Filtros, Regressão e Fator de Correção",
             xaxis_title="Deslocamento Absoluto (mm)",
             yaxis_title="Força (kN)",
             legend_title="Sensor",
@@ -169,8 +184,3 @@ if uploaded_file_calibracao:
         )
         
         st.plotly_chart(fig, use_container_width=True)
-        
-    else:
-        st.error("Erro no processamento do arquivo.")
-else:
-    st.info("Aguardando o carregamento do arquivo.")
