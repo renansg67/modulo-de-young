@@ -39,13 +39,14 @@ def carregar_e_limpar_dados(uploaded_file, header_row=6):
 st.set_page_config(layout="wide")
 st.title("📊 Visualização com Regressão e Fator de Correção do Pistão")
 
-# Slider único na sidebar para faixa de força
+# Slider de força na sidebar
 F_range_pct = st.sidebar.slider(
     "Selecione a faixa de força (%)",
     0.0, 100.0, (10.0, 40.0), 1.0
 )
 F_min_pct, F_max_pct = F_range_pct[0] / 100, F_range_pct[1] / 100
 
+# Upload do arquivo
 uploaded_file_calibracao = st.file_uploader(
     "Carregue o Arquivo de Calibração (4 colunas)", type=["csv"]
 )
@@ -54,56 +55,83 @@ if uploaded_file_calibracao:
     df_calibracao = carregar_e_limpar_dados(uploaded_file_calibracao)
     
     if df_calibracao is not None:
+        # Cálculo dos limites de força
         Forca_max_abs = df_calibracao['Forca_Abs'].max()
         F_limite_min = Forca_max_abs * F_min_pct
         F_limite_max = Forca_max_abs * F_max_pct
         
-        st.info(f"Força máxima: {Forca_max_abs:.3f} kN\n"
-                f"Faixa de exibição: {F_limite_min:.3f} – {F_limite_max:.3f} kN")
+        # --- Slider para deformação (em mm) ---
+        desl_min, desl_max = (
+            float(df_calibracao[['Desl_LVDT_Abs', 'Desl_Pistao_Abs']].min().min()),
+            float(df_calibracao[['Desl_LVDT_Abs', 'Desl_Pistao_Abs']].max().max())
+        )
+        desl_range = st.sidebar.slider(
+            "Selecione a faixa de deslocamento (mm)",
+            desl_min, desl_max, (desl_min, desl_max), 0.01
+        )
+        D_limite_min, D_limite_max = desl_range
         
-        # --- Filtrar apenas os pontos dentro da faixa ---
+        st.info(f"**Força máxima:** {Forca_max_abs:.3f} kN  \n"
+                f"**Faixa de Força:** {F_limite_min:.3f} – {F_limite_max:.3f} kN  \n"
+                f"**Faixa de Deslocamento:** {D_limite_min:.3f} – {D_limite_max:.3f} mm")
+        
+        # --- Filtragem: dentro dos limites de força E deslocamento ---
         df_filtrado = df_calibracao[
-            (df_calibracao['Forca_Abs'] >= F_limite_min) & 
-            (df_calibracao['Forca_Abs'] <= F_limite_max)
+            (df_calibracao['Forca_Abs'] >= F_limite_min) &
+            (df_calibracao['Forca_Abs'] <= F_limite_max) &
+            (df_calibracao['Desl_LVDT_Abs'] >= D_limite_min) &
+            (df_calibracao['Desl_LVDT_Abs'] <= D_limite_max) &
+            (df_calibracao['Desl_Pistao_Abs'] >= D_limite_min) &
+            (df_calibracao['Desl_Pistao_Abs'] <= D_limite_max)
         ]
         
         # --- Gráfico ---
         fig = go.Figure()
         
         # Linhas auxiliares fora da faixa (mesma cor dos pontos, finas)
-        # LVDT fora da faixa
-        df_out_lvd = df_calibracao[~df_calibracao.index.isin(df_filtrado.index)]
+        df_out = df_calibracao[~df_calibracao.index.isin(df_filtrado.index)]
         fig.add_trace(go.Scatter(
-            x=df_out_lvd['Desl_LVDT_Abs'], y=df_out_lvd['Forca_Abs'],
-            mode='lines', line=dict(color='blue', width=1), name='LVDT Fora da Faixa'
+            x=df_out['Desl_LVDT_Abs'], y=df_out['Forca_Abs'],
+            mode='lines', line=dict(color='blue', width=1, dash='dot'),
+            name='LVDT Fora da Faixa'
         ))
-        # Pistão fora da faixa
         fig.add_trace(go.Scatter(
-            x=df_out_lvd['Desl_Pistao_Abs'], y=df_out_lvd['Forca_Abs'],
-            mode='lines', line=dict(color='red', width=1), name='Pistão Fora da Faixa'
+            x=df_out['Desl_Pistao_Abs'], y=df_out['Forca_Abs'],
+            mode='lines', line=dict(color='red', width=1, dash='dot'),
+            name='Pistão Fora da Faixa'
         ))
         
         # Pontos filtrados coloridos
         fig.add_trace(go.Scatter(
             x=df_filtrado['Desl_LVDT_Abs'], y=df_filtrado['Forca_Abs'],
-            mode='markers', marker=dict(color='blue', size=6), name='LVDT (Faixa)'
+            mode='markers', marker=dict(color='blue', size=6),
+            name='LVDT (Faixa)'
         ))
         fig.add_trace(go.Scatter(
             x=df_filtrado['Desl_Pistao_Abs'], y=df_filtrado['Forca_Abs'],
-            mode='markers', marker=dict(color='red', size=6), name='Pistão (Faixa)'
+            mode='markers', marker=dict(color='red', size=6),
+            name='Pistão (Faixa)'
         ))
         
-        # Linhas horizontais de limite destacadas com rótulo
+        # Linhas horizontais de limite de força
         for pct, f_lim in zip([F_min_pct, F_max_pct], [F_limite_min, F_limite_max]):
             fig.add_shape(type="line",
-                          x0=0, x1=max(df_calibracao['Desl_LVDT_Abs'].max(), df_calibracao['Desl_Pistao_Abs'].max())*1.05,
+                          x0=0, x1=desl_max*1.05,
                           y0=f_lim, y1=f_lim,
-                          line=dict(color="magenta", width=4, dash="dash"))
-            fig.add_annotation(x=0.5, y=f_lim,
-                               text=f"{int(pct*100)}% da Fmáx",
-                               showarrow=False,
-                               font=dict(color="magenta", size=12),
-                               xanchor="left", yanchor="bottom")
+                          line=dict(color="green", width=4, dash="dot"))
+            fig.add_annotation(
+                x=0.5, y=f_lim,
+                text=f"{int(pct*100)}% da Fmáx",
+                showarrow=False, font=dict(color="green", size=12),
+                xanchor="left", yanchor="bottom"
+            )
+        
+        # Linhas verticais de limite de deslocamento
+        for d_lim in [D_limite_min, D_limite_max]:
+            fig.add_shape(type="line",
+                          x0=d_lim, x1=d_lim,
+                          y0=0, y1=Forca_max_abs*1.05,
+                          line=dict(color="purple", width=3, dash="dot"))
         
         # --- Regressão linear (somente pontos filtrados) ---
         if len(df_filtrado) >= 2:
@@ -113,8 +141,8 @@ if uploaded_file_calibracao:
             y_lvd = slope_lvd * x_lvd + intercept_lvd
             fig.add_trace(go.Scatter(
                 x=x_lvd, y=y_lvd, mode='lines',
-                line=dict(color='yellow', width=3, dash='dash'),
-                name=f'Reg. LVDT (slp={slope_lvd:.2f})'
+                line=dict(color='magenta', width=3, dash='dash'),
+                name=f'Regressão LVDT (slope={slope_lvd:.2f})'
             ))
             
             # Pistão
@@ -124,7 +152,7 @@ if uploaded_file_calibracao:
             fig.add_trace(go.Scatter(
                 x=x_pis, y=y_pis, mode='lines',
                 line=dict(color='orange', width=3, dash='dash'),
-                name=f'Reg. Pistão (slp={slope_pis:.2f})'
+                name=f'Regressão Pistão (slope={slope_pis:.2f})'
             ))
             
             # --- Cálculo do fator de correção do módulo do pistão ---
@@ -132,7 +160,7 @@ if uploaded_file_calibracao:
             st.success(f"✅ Fator de Correção do Módulo (Pistão) = {fator_correcao:.3f}")
         
         fig.update_layout(
-            title="Carga vs Deslocamento com Regressão na Faixa Selecionada",
+            title="Carga vs Deslocamento com Filtros e Regressão",
             xaxis_title="Deslocamento Absoluto (mm)",
             yaxis_title="Força (kN)",
             legend_title="Sensor",
