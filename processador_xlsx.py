@@ -2,8 +2,8 @@ import pandas as pd
 import os
 
 # --- CONFIGURAÇÃO ---
-xlsx_file = "ensaios_ruptura.xlsx"  # <-- Substitua pelo caminho do seu arquivo Excel
-output_folder = "ensaios_flexao"      # Pasta onde os CSVs serão salvos
+xlsx_file = "modulo_3_pontos.xlsx"  # <-- Substitua pelo caminho do seu arquivo Excel
+output_folder = "ensaios_modulo_3_pontos"      # Pasta onde os CSVs serão salvos
 
 # Cria a pasta de saída se não existir
 os.makedirs(output_folder, exist_ok=True)
